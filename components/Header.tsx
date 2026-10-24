@@ -17,7 +17,7 @@ export default function Header({ activePath }: HeaderProps) {
 
   const navLinks = [
     { label: 'Home', href: '/' },
-    { label: 'Destinations', href: '/destinations' },
+    { label: 'Destinations', href: '/destination' },
     { label: 'My Bookings', href: '/bookings' },
     { label: 'Admin', href: '/admin' },
   ];
@@ -32,7 +32,9 @@ export default function Header({ activePath }: HeaderProps) {
             {navLinks.map((link) => {
               const isActive =
                 currentPath === link.href ||
-                (link.href !== '/' && currentPath?.startsWith(link.href));
+                (link.href !== '/' && currentPath?.startsWith(link.href)) ||
+                (link.label === 'Destinations' &&
+                  (currentPath === '/destination' || currentPath === '/destinations'));
               return (
                 <Link
                   key={link.label}
