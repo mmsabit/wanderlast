@@ -323,7 +323,7 @@ export default function DestinationsPage() {
             <div key={item.id} className="group flex flex-col">
               
               {/* Destination Card Image with Rating Badge */}
-              <div className="relative w-full aspect-[16/10] overflow-hidden bg-neutral-100 rounded-none sm:rounded-sm">
+              <div className="relative w-full aspect-16/10 overflow-hidden bg-neutral-100 rounded-none sm:rounded-sm">
                 <Image
                   src={item.imageUrl}
                   alt={item.title}

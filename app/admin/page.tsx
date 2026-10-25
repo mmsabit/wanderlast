@@ -1,7 +1,9 @@
-'use client';
+"use client";
 
-import React, { useState } from 'react';
-import { Trash2, Save, ChevronDown, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from "react";
+import { Trash2, Save, ChevronDown, CheckCircle2 } from "lucide-react";
+import type { Instance } from "flatpickr/dist/types/instance";
+import { Bounce, toast } from "react-toastify";
 
 interface TravelPackageFormData {
   destinationName: string;
@@ -15,36 +17,86 @@ interface TravelPackageFormData {
 }
 
 const initialFormState: TravelPackageFormData = {
-  destinationName: '',
-  country: '',
-  category: 'Beach',
-  price: '',
-  duration: '',
-  departureDate: '',
-  imageUrl: '',
-  description: '',
+  destinationName: "",
+  country: "",
+  category: "Beach",
+  price: "",
+  duration: "",
+  departureDate: "",
+  imageUrl: "",
+  description: "",
 };
 
 export default function AdminPage() {
-  const [formData, setFormData] = useState<TravelPackageFormData>(initialFormState);
+  const [formData, setFormData] =
+    useState<TravelPackageFormData>(initialFormState);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showCancelNotice, setShowCancelNotice] = useState(false);
+  const departureDateInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const flatpickrRef = useRef<Instance | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    let instance: Instance | undefined;
+
+    import("flatpickr")
+      .then(({ default: flatpickr }) => {
+        if (!isMounted || !departureDateInputRef.current) return;
+
+        instance = flatpickr(departureDateInputRef.current, {
+          dateFormat: "j, F Y",
+          onChange: (_selectedDates, dateString) => {
+            setFormData((prev) => ({ ...prev, departureDate: dateString }));
+          },
+        });
+        flatpickrRef.current = instance;
+      })
+      .catch((error: unknown) => {
+        console.error("Failed to load the departure date picker.", error);
+      });
+
+    return () => {
+      isMounted = false;
+      instance?.destroy();
+      flatpickrRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    flatpickrRef.current?.setDate(formData.departureDate, false, "j, F Y");
+  }, [formData.departureDate]);
 
   const categories = [
-    'Beach',
-    'Mountain',
-    'Adventure',
-    'Cultural',
-    'City Tour',
-    'Wildlife & Safari',
-    'Cruise',
-    'Luxury',
+    "Beach",
+    "Mountain",
+    "Adventure",
+    "Cultural",
+    "City Tour",
+    "Wildlife & Safari",
+    "Cruise",
+    "Luxury",
   ];
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
+    e: React.ChangeEvent<
+      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+    >,
   ) => {
-    const { name, value } = e.target;
+    const { name, value, type } = e.target;
+
+    if (type === "file" && e.target instanceof HTMLInputElement) {
+      const file = e.target.files?.[0] || null;
+      setSelectedFile(file);
+      setFormData((prev) => ({
+        ...prev,
+        imageUrl: file ? file.name : "",
+      }));
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -53,23 +105,108 @@ export default function AdminPage() {
 
   const handleCancel = () => {
     setFormData(initialFormState);
+    setSelectedFile(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     setShowCancelNotice(true);
     setTimeout(() => setShowCancelNotice(false), 3000);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitted(true);
-    setTimeout(() => {
-      setIsSubmitted(false);
-      setFormData(initialFormState);
-    }, 3500);
+
+    if (!selectedFile) {
+      toast.error("Please select an image file to upload", {
+        position: "bottom-center",
+        theme: "light",
+      });
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+
+      // 1. Upload the image file to /api/upload
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", selectedFile);
+
+      const uploadRes = await fetch("/api/upload", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      const uploadData = await uploadRes.json();
+
+      if (!uploadRes.ok || !uploadData.url) {
+        throw new Error(uploadData.error || "Failed to upload image");
+      }
+
+      // 2. Submit package data with the saved image URL
+      const finalFormData = {
+        ...formData,
+        imageUrl: uploadData.url,
+      };
+
+      const res = await fetch("http://localhost:8000/destination", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(finalFormData),
+      });
+
+      await res.json();
+
+      if (res.ok) {
+        toast.success("Destination Successfully added", {
+          position: "bottom-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+          transition: Bounce,
+        });
+
+        setFormData(initialFormState);
+        setSelectedFile(null);
+        if (fileInputRef.current) {
+          fileInputRef.current.value = "";
+        }
+      } else {
+        toast.error("Destination Added Failed", {
+          position: "bottom-center",
+          autoClose: 5000,
+          hideProgressBar: false,
+          closeOnClick: false,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+          theme: "light",
+          transition: Bounce,
+        });
+      }
+} catch (error: unknown) {
+      console.error(error);
+      const message =
+        error instanceof Error ? error.message : "An error occurred while uploading";
+
+      toast.error(message, {
+        position: "bottom-center",
+        autoClose: 5000,
+        theme: "light",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        
         {/* Title */}
         <h1 className="text-3xl sm:text-4xl md:text-[44px] font-serif font-normal text-neutral-900 tracking-tight mb-8 sm:mb-12">
           Add New Travel Package
@@ -93,7 +230,6 @@ export default function AdminPage() {
         {/* Form Card */}
         <div className="max-w-2xl mx-auto bg-white rounded-lg border border-neutral-200/70 shadow-[0_4px_24px_rgba(0,0,0,0.03)] p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-5">
-            
             {/* Destination Name */}
             <div>
               <label
@@ -211,12 +347,13 @@ export default function AdminPage() {
                 Departure Date
               </label>
               <input
+                ref={departureDateInputRef}
                 type="text"
                 id="departureDate"
                 name="departureDate"
                 value={formData.departureDate}
-                onChange={handleChange}
-                placeholder="mm/dd/yyyy"
+                readOnly
+                placeholder="24, October 2026"
                 required
                 className="w-full bg-[#f8f9fa] border border-neutral-200/80 rounded-md px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-[#00a2b5] focus:ring-1 focus:ring-[#00a2b5] transition-all"
               />
@@ -228,17 +365,17 @@ export default function AdminPage() {
                 htmlFor="imageUrl"
                 className="block text-sm font-medium text-neutral-800 mb-1.5"
               >
-                Image URL
+                Image Upload
               </label>
               <input
-                type="url"
+                ref={fileInputRef}
+                type="file"
                 id="imageUrl"
                 name="imageUrl"
-                value={formData.imageUrl}
                 onChange={handleChange}
-                placeholder="https://example.com/image.jpg"
+                accept="image/*"
                 required
-                className="w-full bg-[#f8f9fa] border border-neutral-200/80 rounded-md px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-[#00a2b5] focus:ring-1 focus:ring-[#00a2b5] transition-all"
+                className="w-full bg-[#f8f9fa] border border-neutral-200/80 rounded-md px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-[#00a2b5] focus:ring-1 focus:ring-[#00a2b5] transition-all cursor-pointer"
               />
             </div>
 
@@ -267,7 +404,8 @@ export default function AdminPage() {
               <button
                 type="button"
                 onClick={handleCancel}
-                className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-300 hover:border-rose-400 bg-white hover:bg-rose-50 text-rose-500 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-rose-200"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 border border-rose-300 hover:border-rose-400 bg-white hover:bg-rose-50 text-rose-500 rounded text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-rose-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Trash2 className="w-4 h-4 stroke-[1.8]" />
                 <span>Cancel</span>
@@ -275,18 +413,16 @@ export default function AdminPage() {
 
               <button
                 type="submit"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a2b5] hover:bg-[#008f9f] text-white rounded text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00a2b5]/40"
+                disabled={isSubmitting}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a2b5] hover:bg-[#008f9f] text-white rounded text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00a2b5]/40 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4 stroke-[1.8]" />
-                <span>Add Travel Package</span>
+                <span>{isSubmitting ? "Uploading & Saving..." : "Add Travel Package"}</span>
               </button>
             </div>
-
           </form>
         </div>
-
       </div>
     </div>
   );
 }
-
