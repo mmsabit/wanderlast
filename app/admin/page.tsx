@@ -30,12 +30,10 @@ const initialFormState: TravelPackageFormData = {
 export default function AdminPage() {
   const [formData, setFormData] =
     useState<TravelPackageFormData>(initialFormState);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isSubmitted] = useState(false);
   const [showCancelNotice, setShowCancelNotice] = useState(false);
   const departureDateInputRef = useRef<HTMLInputElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const flatpickrRef = useRef<Instance | null>(null);
 
   useEffect(() => {
@@ -85,17 +83,7 @@ export default function AdminPage() {
       HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
     >,
   ) => {
-    const { name, value, type } = e.target;
-
-    if (type === "file" && e.target instanceof HTMLInputElement) {
-      const file = e.target.files?.[0] || null;
-      setSelectedFile(file);
-      setFormData((prev) => ({
-        ...prev,
-        imageUrl: file ? file.name : "",
-      }));
-      return;
-    }
+    const { name, value } = e.target;
 
     setFormData((prev) => ({
       ...prev,
@@ -105,10 +93,6 @@ export default function AdminPage() {
 
   const handleCancel = () => {
     setFormData(initialFormState);
-    setSelectedFile(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
     setShowCancelNotice(true);
     setTimeout(() => setShowCancelNotice(false), 3000);
   };
@@ -116,44 +100,15 @@ export default function AdminPage() {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
-    if (!selectedFile) {
-      toast.error("Please select an image file to upload", {
-        position: "bottom-center",
-        theme: "light",
-      });
-      return;
-    }
-
     try {
       setIsSubmitting(true);
-
-      // 1. Upload the image file to /api/upload
-      const uploadFormData = new FormData();
-      uploadFormData.append("file", selectedFile);
-
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: uploadFormData,
-      });
-
-      const uploadData = await uploadRes.json();
-
-      if (!uploadRes.ok || !uploadData.url) {
-        throw new Error(uploadData.error || "Failed to upload image");
-      }
-
-      // 2. Submit package data with the saved image URL
-      const finalFormData = {
-        ...formData,
-        imageUrl: uploadData.url,
-      };
 
       const res = await fetch("http://localhost:8000/destination", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(finalFormData),
+        body: JSON.stringify(formData),
       });
 
       await res.json();
@@ -172,10 +127,6 @@ export default function AdminPage() {
         });
 
         setFormData(initialFormState);
-        setSelectedFile(null);
-        if (fileInputRef.current) {
-          fileInputRef.current.value = "";
-        }
       } else {
         toast.error("Destination Added Failed", {
           position: "bottom-center",
@@ -189,10 +140,10 @@ export default function AdminPage() {
           transition: Bounce,
         });
       }
-} catch (error: unknown) {
+    } catch (error: unknown) {
       console.error(error);
       const message =
-        error instanceof Error ? error.message : "An error occurred while uploading";
+        error instanceof Error ? error.message : "An error occurred while saving";
 
       toast.error(message, {
         position: "bottom-center",
@@ -365,17 +316,17 @@ export default function AdminPage() {
                 htmlFor="imageUrl"
                 className="block text-sm font-medium text-neutral-800 mb-1.5"
               >
-                Image Upload
+                Image URL
               </label>
               <input
-                ref={fileInputRef}
-                type="file"
+                type="url"
                 id="imageUrl"
                 name="imageUrl"
+                value={formData.imageUrl}
                 onChange={handleChange}
-                accept="image/*"
+                placeholder="https://example.com/image.jpg"
                 required
-                className="w-full bg-[#f8f9fa] border border-neutral-200/80 rounded-md px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-[#00a2b5] focus:ring-1 focus:ring-[#00a2b5] transition-all cursor-pointer"
+                className="w-full bg-[#f8f9fa] border border-neutral-200/80 rounded-md px-3.5 py-2.5 text-sm text-neutral-800 placeholder-neutral-400 focus:outline-none focus:bg-white focus:border-[#00a2b5] focus:ring-1 focus:ring-[#00a2b5] transition-all"
               />
             </div>
 
@@ -417,7 +368,7 @@ export default function AdminPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#00a2b5] hover:bg-[#008f9f] text-white rounded text-sm font-medium transition-colors shadow-sm focus:outline-none focus:ring-2 focus:ring-[#00a2b5]/40 disabled:opacity-70 disabled:cursor-not-allowed"
               >
                 <Save className="w-4 h-4 stroke-[1.8]" />
-                <span>{isSubmitting ? "Uploading & Saving..." : "Add Travel Package"}</span>
+                <span>{isSubmitting ? "Saving..." : "Add Travel Package"}</span>
               </button>
             </div>
           </form>

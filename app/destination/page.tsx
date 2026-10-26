@@ -8,51 +8,94 @@ import {
   ArrowUpRight,
   ChevronDown,
   Star,
-  X,
-  CheckCircle2,
   SlidersHorizontal,
+  Loader2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface DestinationItem {
-  id: number;
+  id: string | number;
+  _id?: string;
   title: string;
+  destinationName?: string;
   country: string;
   price: number;
   duration: string;
   rating: number;
   category: string;
   imageUrl: string;
+  departureDate?: string;
   description?: string;
 }
 
-const destinationsData: DestinationItem[] = [
-  {
-    id: 1,
-    title: 'Bali Paradise',
-    country: 'Nepal',
-    price: 2700,
-    duration: '7 Days/6 Nights',
-    rating: 4.5,
-    category: 'Beach',
-    imageUrl:
-      'https://images.unsplash.com/photo-1540959733332-eab4deabeeaf?auto=format&fit=crop&w=1200&q=80',
-    description:
-      'Experience majestic island vistas from the sky and immerse yourself in tropical tranquility.',
-  },
-  
-];
+interface DestinationApiItem {
+  _id?: string;
+  id?: string | number;
+  title?: string;
+  destinationName?: string;
+  country?: string;
+  price?: string | number;
+  duration?: string;
+  rating?: string | number;
+  category?: string;
+  imageUrl?: string;
+  departureDate?: string;
+  description?: string;
+}
 
 export default function DestinationsPage() {
+  const [destinations, setDestinations] = useState<DestinationItem[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [selectedPriceRange, setSelectedPriceRange] = useState<string>('All');
   const [selectedSort, setSelectedSort] = useState<string>('Featured');
 
   const [activeDropdown, setActiveDropdown] = useState<'category' | 'price' | 'sort' | null>(null);
-  const [selectedDestinationForBooking, setSelectedDestinationForBooking] =
-    useState<DestinationItem | null>(null);
-  const [bookingConfirmed, setBookingConfirmed] = useState(false);
 
   const filterBarRef = useRef<HTMLDivElement>(null);
+
+  // Fetch destinations from API
+  const fetchDestinations = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const res = await fetch('http://localhost:8000/destination');
+      if (!res.ok) {
+        throw new Error(`Failed to load destinations (${res.status})`);
+      }
+      const data = await res.json();
+      const formatted: DestinationItem[] = (Array.isArray(data) ? data as DestinationApiItem[] : []).map(
+        (item, index) => ({
+          id: item._id || item.id || String(index),
+          _id: item._id,
+          title: item.title || item.destinationName || 'Untitled Package',
+          country: item.country || '',
+          price:
+            typeof item.price === 'string'
+              ? parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0
+              : Number(item.price) || 0,
+          duration: item.duration || '',
+          rating: Number(item.rating) || 4.8,
+          category: item.category || 'Other',
+          imageUrl: item.imageUrl || '',
+          departureDate: item.departureDate,
+          description: item.description || '',
+        })
+      );
+      setDestinations(formatted);
+    } catch (err: unknown) {
+      console.error('Fetch destinations error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch destinations');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void Promise.resolve().then(() => fetchDestinations());
+  }, []);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -65,12 +108,22 @@ export default function DestinationsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const categories = ['All', 'Beach', 'Mountain', 'Adventure', 'Cultural', 'Luxury'];
+  const categories = [
+    'All',
+    'Beach',
+    'Mountain',
+    'Adventure',
+    'Cultural',
+    'City Tour',
+    'Wildlife & Safari',
+    'Cruise',
+    'Luxury',
+  ];
   const priceRanges = ['All', 'Under $2,000', '$2,000 - $3,000', 'Over $3,000'];
   const sortOptions = ['Featured', 'Price: Low to High', 'Price: High to Low', 'Highest Rated'];
 
   // Filter & Sort Logic
-  const filteredDestinations = destinationsData
+  const filteredDestinations = destinations
     .filter((item) => {
       if (selectedCategory !== 'All' && item.category !== selectedCategory) {
         return false;
@@ -85,22 +138,8 @@ export default function DestinationsPage() {
       if (selectedSort === 'Price: Low to High') return a.price - b.price;
       if (selectedSort === 'Price: High to Low') return b.price - a.price;
       if (selectedSort === 'Highest Rated') return b.rating - a.rating;
-      return a.id - b.id;
+      return String(a.id).localeCompare(String(b.id));
     });
-
-  const handleBookNow = (dest: DestinationItem) => {
-    setSelectedDestinationForBooking(dest);
-    setBookingConfirmed(false);
-  };
-
-  const confirmBooking = (e: React.FormEvent) => {
-    e.preventDefault();
-    setBookingConfirmed(true);
-    setTimeout(() => {
-      setBookingConfirmed(false);
-      setSelectedDestinationForBooking(null);
-    }, 2500);
-  };
 
   return (
     <div className="min-h-[calc(100vh-80px)] bg-white py-10 sm:py-14 px-4 sm:px-6 lg:px-8">
@@ -295,8 +334,32 @@ export default function DestinationsPage() {
           )}
         </div>
 
+        {/* Loading State */}
+        {isLoading && (
+          <div className="py-24 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-8 h-8 text-[#00a2b5] animate-spin" />
+            <p className="text-neutral-500 text-sm">Loading destinations...</p>
+          </div>
+        )}
+
+        {/* Error State */}
+        {!isLoading && error && (
+          <div className="py-12 px-6 text-center border border-red-200 bg-red-50/50 rounded-lg max-w-lg mx-auto">
+            <AlertCircle className="w-8 h-8 text-red-500 mx-auto mb-2" />
+            <h3 className="text-base font-semibold text-neutral-800">Failed to Load Destinations</h3>
+            <p className="text-sm text-neutral-600 mt-1 mb-4">{error}</p>
+            <button
+              type="button"
+              onClick={fetchDestinations}
+              className="px-4 py-2 bg-[#00a2b5] text-white text-xs font-medium rounded hover:bg-[#008f9f] transition-colors"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
         {/* Empty State if no destination matches */}
-        {filteredDestinations.length === 0 && (
+        {!isLoading && !error && filteredDestinations.length === 0 && (
           <div className="py-16 text-center border border-dashed border-neutral-300 rounded-lg">
             <SlidersHorizontal className="w-10 h-10 mx-auto text-neutral-400 stroke-1 mb-3" />
             <h3 className="text-lg font-medium text-neutral-800">No destinations found</h3>
@@ -318,9 +381,10 @@ export default function DestinationsPage() {
         )}
 
         {/* Destinations Grid (3 columns on desktop) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
-          {filteredDestinations.map((item) => (
-            <div key={item.id} className="group flex flex-col">
+        {!isLoading && !error && filteredDestinations.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-12">
+            {filteredDestinations.map((item) => (
+              <div key={item.id} className="group flex flex-col">
               
               {/* Destination Card Image with Rating Badge */}
               <div className="relative w-full aspect-16/10 overflow-hidden bg-neutral-100 rounded-none sm:rounded-sm">
@@ -380,7 +444,6 @@ export default function DestinationsPage() {
                 <div className="mt-auto pt-1">
                   <button
                     type="button"
-                    onClick={() => handleBookNow(item)}
                     className="inline-flex items-center gap-1 text-[#00a2b5] hover:text-[#008f9f] text-xs font-semibold tracking-wider uppercase underline underline-offset-4 decoration-1 transition-colors group/btn"
                   >
                     <span>BOOK NOW</span>
@@ -392,134 +455,9 @@ export default function DestinationsPage() {
             </div>
           ))}
         </div>
+      )}
 
       </div>
-
-      {/* Booking Modal */}
-      {selectedDestinationForBooking && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-neutral-200 relative animate-in zoom-in-95 duration-150">
-            
-            <button
-              type="button"
-              onClick={() => setSelectedDestinationForBooking(null)}
-              className="absolute top-4 right-4 text-neutral-400 hover:text-neutral-700 p-1 rounded-full hover:bg-neutral-100 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            {bookingConfirmed ? (
-              <div className="py-8 text-center space-y-3">
-                <CheckCircle2 className="w-14 h-14 text-teal-600 mx-auto animate-bounce" />
-                <h3 className="text-2xl font-semibold text-neutral-900">Booking Confirmed!</h3>
-                <p className="text-neutral-600 text-sm max-w-sm mx-auto">
-                  Thank you for booking <strong>{selectedDestinationForBooking.title}</strong>. We
-                  have sent a confirmation email with all trip details.
-                </p>
-              </div>
-            ) : (
-              <div>
-                <div className="flex items-start gap-4 mb-5 pb-4 border-b border-neutral-100">
-                  <div className="relative w-20 h-20 rounded-md overflow-hidden shrink-0">
-                    <Image
-                      src={selectedDestinationForBooking.imageUrl}
-                      alt={selectedDestinationForBooking.title}
-                      fill
-                      unoptimized
-                      className="object-cover"
-                    />
-                  </div>
-                  <div>
-                    <span className="text-xs font-medium text-[#00a2b5] uppercase tracking-wider">
-                      {selectedDestinationForBooking.category}
-                    </span>
-                    <h3 className="text-xl font-medium text-neutral-900">
-                      {selectedDestinationForBooking.title}
-                    </h3>
-                    <p className="text-sm text-neutral-500 flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3.5 h-3.5" />
-                      {selectedDestinationForBooking.country} • {selectedDestinationForBooking.duration}
-                    </p>
-                    <p className="text-base font-semibold text-neutral-900 mt-1">
-                      ${selectedDestinationForBooking.price}{' '}
-                      <span className="text-xs text-neutral-500 font-normal">/Person</span>
-                    </p>
-                  </div>
-                </div>
-
-                <form onSubmit={confirmBooking} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-medium uppercase tracking-wider text-neutral-700 mb-1">
-                      Full Name
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Jane Doe"
-                      className="w-full bg-[#f8f9fa] border border-neutral-200 rounded px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:border-[#00a2b5] focus:bg-white"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium uppercase tracking-wider text-neutral-700 mb-1">
-                        Email Address
-                      </label>
-                      <input
-                        type="email"
-                        required
-                        placeholder="jane@example.com"
-                        className="w-full bg-[#f8f9fa] border border-neutral-200 rounded px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:border-[#00a2b5] focus:bg-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium uppercase tracking-wider text-neutral-700 mb-1">
-                        Travel Date
-                      </label>
-                      <input
-                        type="date"
-                        required
-                        className="w-full bg-[#f8f9fa] border border-neutral-200 rounded px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:border-[#00a2b5] focus:bg-white"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-medium uppercase tracking-wider text-neutral-700 mb-1">
-                      Number of Guests
-                    </label>
-                    <select
-                      defaultValue="2 Guests"
-                      className="w-full bg-[#f8f9fa] border border-neutral-200 rounded px-3 py-2 text-sm text-neutral-800 focus:outline-none focus:border-[#00a2b5] focus:bg-white"
-                    >
-                      <option>1 Guest</option>
-                      <option>2 Guests</option>
-                      <option>3 Guests</option>
-                      <option>4+ Guests</option>
-                    </select>
-                  </div>
-
-                  <div className="pt-2 flex items-center justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDestinationForBooking(null)}
-                      className="px-4 py-2 border border-neutral-300 text-neutral-700 text-xs font-medium rounded hover:bg-neutral-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="px-5 py-2 bg-[#00a2b5] hover:bg-[#008f9f] text-white text-xs font-semibold tracking-wider uppercase rounded transition-colors shadow-sm"
-                    >
-                      Confirm Booking
-                    </button>
-                  </div>
-                </form>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
