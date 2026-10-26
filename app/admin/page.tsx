@@ -76,6 +76,7 @@ export default function AdminPage() {
     "Wildlife & Safari",
     "Cruise",
     "Luxury",
+    "Historycal Place"
   ];
 
   const handleChange = (

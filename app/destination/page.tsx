@@ -2,6 +2,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import {
   MapPin,
   Calendar,
@@ -442,13 +443,13 @@ export default function DestinationsPage() {
 
                 {/* Book Now Action */}
                 <div className="mt-auto pt-1">
-                  <button
-                    type="button"
+                  <Link
+                    href={`/destination/${item.id}`}
                     className="inline-flex items-center gap-1 text-[#00a2b5] hover:text-[#008f9f] text-xs font-semibold tracking-wider uppercase underline underline-offset-4 decoration-1 transition-colors group/btn"
                   >
                     <span>BOOK NOW</span>
                     <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.4] transition-transform duration-150 group-hover/btn:translate-x-0.5 group-hover/btn:-translate-y-0.5" />
-                  </button>
+                  </Link>
                 </div>
 
               </div>
